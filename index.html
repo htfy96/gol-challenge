@@ -29,7 +29,7 @@
         <p>本游戏的目的是，用<em>尽可能少</em>的初始生物，让1000回合内的生命覆盖过给定的所有点, 同时不覆盖到给定的另一些点</p>
         <p>在Reset后，点击格子设置初始生命</p>
         <p>任何初始数目&lt;25的解法都能获得红包</p>
-        <p>存在只需要14个初始生命的解法</p>
+        <p>存在只需要<del>14</del>10个初始生命的解法</p>
     </section>
     <section>
         <button id="reset">Reset</button>
@@ -174,9 +174,13 @@
             const x = parseInt(ex / 20),
                 y = parseInt(ey / 20);
             if (state.gen) return;
-            if (state.init_pos.find(v => v[0] === x && v[1] === y)) return;
-            state.init_pos.push([x, y]);
-            state.cur_state[x * 50 + y] = 1;
+            if (state.init_pos.find(v => v[0] === x && v[1] === y)) {
+                state.init_pos = state.init_pos.filter(v => v[0] != x || v[1] != y);
+                state_cur_state[x * H + y] = 0;
+            } else {
+                state.init_pos.push([x, y]);
+                state.cur_state[x * 50 + y] = 1;
+            }
             updateEverCovered();
             render();
         });
