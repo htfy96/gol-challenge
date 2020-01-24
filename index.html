@@ -39,7 +39,7 @@
         <p>当前设置的初始生命数：<span id="initcnt">0</span></p>
         <p>有<span id="uncovered_cnt"></span>个需要被cover的格子未被cover到, 有<span id="miscovered_cnt"></span>个本不应该被cover的格子被cover到了</p>
         <p id="congrat">
-            Congratulations! 你的解法已经cover了所有需要被cover的格子，而且没有碰到所有不能被cover的格子，请复制以下内容找@VicLuo96领取红包
+            Congratulations! 你的解法已经cover了所有需要被cover的格子，而且没有碰到任何不能被cover的格子，请复制以下内容找@VicLuo96领取红包
             <textarea id="solutiondump"></textarea>
         </p>
 
@@ -219,13 +219,15 @@
         document.getElementById("run").addEventListener("click", function() {
             if (state.gen >= 1000) return;
             document.getElementById("run").disabled = true;
+            document.getElementById("reset").disabled = true;
             handle = setInterval(() => {
                 if (state.gen >= 1000) {
                     clearInterval(handle);
                     document.getElementById("run").disabled = false;
+                    document.getElementById("reset").disabled = false;
                 }
                 step();
-            }, 10)
+            }, 7)
         });
         resetState();
         render();
