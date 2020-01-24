@@ -1,0 +1,236 @@
+<!doctype html>
+<html class="no-js" lang="zh-CN">
+
+
+<head>
+    <meta charset="utf-8">
+    <title></title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="reset.css">
+
+    <meta name="theme-color" content="#fafafa">
+</head>
+
+<body>
+    <h1>Game of Life Challenge</h1>
+    <section>
+        <p>Conway的生命游戏有着很简单的规则与非常复杂的结果。简单来说：
+            <ul>
+
+                <li>所有事件发生在一个50x50的网格内，每个网格拥有 有生物 / 无生物两种状态之一</li>
+                <li>在一个回合里，上一个回合有生物的格子，如果周围的8格的生物数不是2/3个，那么这个回合生物死去，否则持续生存</li>
+                <li>在一个回合里，上一个回合没有生物的格子，如果周围8格的生物数是3个，那么这个回合产生一个生物，否则持续没有生物</li>
+                <li><a href="https://www.conwaylife.com/" target="_blank" nofollow="1">Read more here</a></li>
+                <li><a href="http://golly.sourceforge.net/" target="_blank" nofollow="1">可以使用Golly模拟器在本机模拟</a></li>
+            </ul>
+        </p>
+        <p>本游戏的目的是，用<em>尽可能少</em>的初始生物，让1000回合内的生命覆盖过给定的所有点, 同时不覆盖到给定的另一些点</p>
+        <p>在Reset后，点击格子设置初始生命</p>
+        <p>任何初始数目&lt;25的解法都能获得红包</p>
+        <p>存在只需要14个初始生命的解法</p>
+    </section>
+    <section>
+        <button id="reset">Reset</button>
+        <button id="step">Step</button>
+        <button id="run">Run</button>
+        <p>当前generation: <span id="gen">0</span></p>
+        <p>当前设置的初始生命数：<span id="initcnt">0</span></p>
+        <p>有<span id="uncovered_cnt"></span>个需要被cover的格子未被cover到, 有<span id="miscovered_cnt"></span>个本不应该被cover的格子被cover到了</p>
+        <p id="congrat">
+            Congratulations! 你的解法已经cover了所有需要被cover的格子，而且没有碰到所有不能被cover的格子，请复制以下内容找@VicLuo96领取红包
+            <textarea id="solutiondump"></textarea>
+        </p>
+
+        <canvas id="canvas" class="world"></canvas>
+    </section>
+
+    <script>
+        var state;
+        const MARKED_POS = [
+            [35, 35],
+            [35, 36],
+            [35, 37],
+            [35, 38],
+            [35, 39],
+            [35, 40],
+            [35, 41],
+            [35, 42],
+            [36, 35],
+            [37, 35],
+            [38, 35],
+            [39, 35],
+            [40, 35],
+            [39, 36],
+            [39, 37],
+            [38, 38],
+            [37, 39],
+            [37, 40],
+            [36, 41],
+            [50 - 35, 50 - 35],
+            [50 - 35, 50 - 36],
+            [50 - 35, 50 - 37],
+            [50 - 35, 50 - 38],
+            [50 - 35, 50 - 39],
+            [50 - 35, 50 - 40],
+            [50 - 35, 50 - 41],
+            [50 - 35, 50 - 42],
+            [50 - 36, 50 - 35],
+            [50 - 37, 50 - 35],
+            [50 - 38, 50 - 35],
+            [50 - 39, 50 - 35],
+            [50 - 40, 50 - 35],
+            [50 - 39, 50 - 36],
+            [50 - 39, 50 - 37],
+            [50 - 38, 50 - 38],
+            [50 - 37, 50 - 39],
+            [50 - 37, 50 - 40],
+            [50 - 36, 50 - 41],
+        ];
+
+        const MARKED_NOTOUCH_POS = [
+            [25, 25],
+            [24, 25],
+            [25, 24],
+            [24, 24]
+        ];
+
+        const W = 50,
+            H = 50;
+        const CELL_W = 20,
+            CELL_H = 20;
+
+        function resetState() {
+            state = {
+                gen: 0,
+                init_pos: [],
+                marked_ever_covered: MARKED_POS.map(_ => false),
+                marked_notouch_ever_covered: MARKED_NOTOUCH_POS.map(_ => false),
+                cur_state: new Uint8Array(50 * 50)
+            };
+        }
+
+        function render() {
+            document.getElementById("gen").innerText = state.gen;
+            document.getElementById("initcnt").innerText = state.init_pos.length;
+            const uncovered_cnt = state.marked_ever_covered.filter(v => !v).length;
+            const miscovered_cnt = state.marked_notouch_ever_covered.filter(v => v).length;
+
+            document.getElementById("uncovered_cnt").innerText = uncovered_cnt;
+            document.getElementById("miscovered_cnt").innerText = miscovered_cnt;
+            document.getElementById("congrat").style.display = (state.gen >= 1000 && !uncovered_cnt && !miscovered_cnt) ? "block" : "none";
+            document.getElementById("solutiondump").value = JSON.stringify(state.init_pos, null, 4);
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext('2d');
+            canvas.width = 1000;
+            canvas.height = 1000;
+            ctx.clearRect(0, 0, 1000, 1000);
+            ctx.fillStyle = "#fff";
+            ctx.strokeStyle = "#333";
+            for (var i = 0; i < 50; i++)
+                for (var j = 0; j < 50; j++) {
+                    const marked_idx = MARKED_POS.findIndex(v => v[0] === i && v[1] === j);
+                    const marked_notouch_idx = MARKED_NOTOUCH_POS.findIndex(v => v[0] === i && v[1] === j);
+                    if (state.cur_state[i * 50 + j]) {
+                        ctx.fillStyle = "#111";
+                        ctx.fillRect(i * 20, j * 20, 20, 20);
+                        ctx.fillStyle = "#fff";
+                    } else if (marked_idx >= 0) {
+                        const ever_covered = state.marked_ever_covered[marked_idx];
+                        ctx.fillStyle = ever_covered ? "#d4e157" : "#ffd54f";
+                        ctx.fillRect(i * 20, j * 20, 20, 20);
+                        ctx.fillStyle = "#fff";
+                    } else if (marked_notouch_idx >= 0) {
+                        const ever_covered = state.marked_notouch_ever_covered[marked_notouch_idx];
+                        ctx.fillStyle = ever_covered ? "#b71c1c" : "#e57373";
+                        ctx.fillRect(i * 20, j * 20, 20, 20);
+                        ctx.fillStyle = "#fff";
+                    }
+                    ctx.strokeRect(i * 20, j * 20, 20, 20);
+                }
+        }
+
+        function updateEverCovered() {
+            MARKED_POS.forEach((v, idx) => {
+                if (state.cur_state[v[0] * 50 + v[1]])
+                    state.marked_ever_covered[idx] = true;
+            })
+            MARKED_NOTOUCH_POS.forEach((v, idx) => {
+                if (state.cur_state[v[0] * H + v[1]])
+                    state.marked_notouch_ever_covered[idx] = true;
+            })
+        }
+
+        document.getElementById("reset").addEventListener("click", function() {
+            resetState();
+            render();
+        });
+
+        document.getElementById("canvas").addEventListener("click", function(e) {
+            const rect = document.getElementById("canvas").getBoundingClientRect()
+            const ex = e.clientX - rect.left
+            const ey = e.clientY - rect.top
+            const x = parseInt(ex / 20),
+                y = parseInt(ey / 20);
+            if (state.gen) return;
+            if (state.init_pos.find(v => v[0] === x && v[1] === y)) return;
+            state.init_pos.push([x, y]);
+            state.cur_state[x * 50 + y] = 1;
+            updateEverCovered();
+            render();
+        });
+
+        function loadDump(solution) {
+            resetState();
+            state.init_pos = solution;
+            solution.forEach(v => {
+                state.cur_state[v[0] * H + v[1]] = 1;
+            });
+            updateEverCovered();
+            render();
+        }
+
+        function step() {
+            const new_state = new Uint8Array(W * H);
+            const DX = [-1, -1, -1, 0, 0, 1, 1, 1],
+                DY = [-1, 0, 1, -1, 1, -1, 0, 1];
+            for (var i = 0; i < W; i++)
+                for (var j = 0; j < H; j++) {
+                    var adj_cnt = 0;
+                    for (var k = 0; k < DX.length; k++) {
+                        var nx = i + DX[k],
+                            ny = j + DY[k];
+                        if (nx >= 0 && nx < W && ny >= 0 && ny < H)
+                            adj_cnt += state.cur_state[nx * H + ny];
+                    }
+                    if (state.cur_state[i * H + j])
+                        new_state[i * H + j] = adj_cnt >= 2 && adj_cnt <= 3;
+                    else
+                        new_state[i * H + j] = adj_cnt === 3;
+                }
+            state.gen += 1;
+            state.cur_state = new_state;
+            updateEverCovered();
+            render();
+        }
+
+        document.getElementById("step").addEventListener("click", step);
+        document.getElementById("run").addEventListener("click", function() {
+            if (state.gen >= 1000) return;
+            document.getElementById("run").disabled = true;
+            handle = setInterval(() => {
+                if (state.gen >= 1000) {
+                    clearInterval(handle);
+                    document.getElementById("run").disabled = false;
+                }
+                step();
+            }, 10)
+        });
+        resetState();
+        render();
+    </script>
+
+</body>
+
+</html>
